@@ -27,6 +27,13 @@
 2. **ВАЖНО**: При установке отметьте галочку ✅ **"Add Python to PATH"**
 3. Нажмите "Install Now"
 
+### Шаг 3: Альтернативный вариант (.exe файл)
+
+Если вы не хотите устанавливать Python, скачайте готовый исполняемый файл:
+
+- 🔗 Или из [[Releases на GitHub](https://github.com/ikopylov116/Keyboard-Text-to-Speech-/blob/main/dist/VirtualKeyboard.exe)](ссылка_на_releases)
+
+Просто запустите скачанный файл — программа готова к работе!
 ### Шаг 2: Установка зависимостей
 
 Откройте командную строку (**cmd**) **от имени администратора** и выполните команды:
@@ -37,3 +44,4 @@
 python -m pip install pynput
 python -m pip install pyttsx3
 python -m pip install tkinter
+
