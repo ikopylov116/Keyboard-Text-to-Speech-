@@ -1,6 +1,6 @@
-"""Start the BlindTyping application from the repository root."""
+"""Launch the modular BlindTyping application."""
 
-from blindtyping.app import main
+from blindtyping.ui import main
 
 
 if __name__ == "__main__":
