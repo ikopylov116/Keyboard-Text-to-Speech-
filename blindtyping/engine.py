@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 import time
-from collections import Counter
 
 
-@dataclass
+@dataclass(frozen=True)
 class TypingResult:
     target: str
     typed: str
@@ -20,14 +20,18 @@ class TypingResult:
 
 
 class TypingSession:
-    """Pure typing logic. UI and speech are deliberately kept outside this class."""
+    """Pure, deterministic typing state. No UI, TTS, files or network access."""
 
-    def __init__(self, target: str):
+    def __init__(self, target: str, allow_backspace: bool = True):
+        if not target:
+            raise ValueError("target must not be empty")
         self.target = target
+        self.allow_backspace = allow_backspace
         self.typed = ""
         self.started_at: float | None = None
         self.finished_at: float | None = None
         self.key_errors: Counter[str] = Counter()
+        self.total_keystrokes = 0
 
     @property
     def running(self) -> bool:
@@ -37,34 +41,50 @@ class TypingSession:
     def finished(self) -> bool:
         return self.finished_at is not None
 
+    @property
+    def position(self) -> int:
+        return len(self.typed)
+
+    @property
+    def expected(self) -> str | None:
+        if self.position >= len(self.target):
+            return None
+        return self.target[self.position]
+
     def start(self) -> None:
         if self.started_at is None:
             self.started_at = time.perf_counter()
 
     def reset(self, target: str | None = None) -> None:
         if target is not None:
+            if not target:
+                raise ValueError("target must not be empty")
             self.target = target
         self.typed = ""
         self.started_at = None
         self.finished_at = None
         self.key_errors.clear()
+        self.total_keystrokes = 0
 
     def add_char(self, char: str) -> bool:
-        if not char or self.finished:
+        if len(char) != 1 or self.finished:
             return False
         self.start()
-        position = len(self.typed)
-        expected = self.target[position] if position < len(self.target) else None
-        if expected != char:
+        expected = self.expected
+        correct = expected == char
+        self.total_keystrokes += 1
+        if not correct:
             self.key_errors[char] += 1
         self.typed += char
-        if len(self.typed) >= len(self.target):
+        if self.position >= len(self.target):
             self.finished_at = time.perf_counter()
-        return expected == char
+        return correct
 
-    def backspace(self) -> None:
-        if self.typed and not self.finished:
-            self.typed = self.typed[:-1]
+    def backspace(self) -> bool:
+        if not self.allow_backspace or not self.typed or self.finished:
+            return False
+        self.typed = self.typed[:-1]
+        return True
 
     def elapsed(self) -> float:
         if self.started_at is None:
@@ -77,9 +97,8 @@ class TypingSession:
         correct = sum(a == b for a, b in zip(self.target, self.typed))
         errors = max(0, len(self.typed) - correct) + max(0, total - len(self.typed))
         elapsed = self.elapsed()
-        accuracy = (correct / total * 100) if total else 100.0
-        cpm = correct / elapsed * 60 if elapsed else 0.0
-        wpm = cpm / 5
+        accuracy = (correct / len(self.typed) * 100) if self.typed else (100.0 if not self.started_at else 0.0)
+        cpm = correct / elapsed * 60 if self.started_at else 0.0
         return TypingResult(
             target=self.target,
             typed=self.typed,
@@ -89,27 +108,6 @@ class TypingSession:
             total_chars=total,
             accuracy=accuracy,
             cpm=cpm,
-            wpm=wpm,
+            wpm=cpm / 5,
             key_errors=dict(self.key_errors),
         )
-
-
-RUSSIAN_TEXTS = [
-    "Начинайте печатать спокойно и не смотрите на клавиатуру.",
-    "Точная печать важнее высокой скорости на первых занятиях.",
-    "Регулярная короткая тренировка помогает уверенно запомнить расположение клавиш.",
-    "Старайтесь держать пальцы в исходной позиции и возвращать их после каждого нажатия.",
-]
-
-ENGLISH_TEXTS = [
-    "Start typing slowly and keep your eyes away from the keyboard.",
-    "Accuracy is more important than speed when you are learning to type.",
-    "Regular short practice makes keyboard positions easier to remember.",
-    "Keep your fingers on the home row and return them after each key press.",
-]
-
-LEVELS = {
-    "Начальный": ["фыва", "олдж", "фыва олдж", "ыва олд", "фыва олдж фыва"],
-    "Средний": ["привет мир", "быстрая печать", "точность важнее скорости"],
-    "Продвинутый": RUSSIAN_TEXTS,
-}
