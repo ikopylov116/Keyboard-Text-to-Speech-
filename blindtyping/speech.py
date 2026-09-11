@@ -5,13 +5,17 @@ import threading
 
 
 class SpeechService:
-    """Optional offline TTS adapter. The trainer still works if pyttsx3 is unavailable."""
+    """Offline TTS adapter. The rest of the application does not depend on pyttsx3."""
 
-    def __init__(self, rate: int = 175, volume: float = 1.0):
+    def __init__(self, rate: int = 175, volume: float = 1.0, enabled: bool = True):
         self.rate = rate
         self.volume = volume
-        self.enabled = True
+        self.enabled = enabled
         self._queue: queue.Queue[str | None] = queue.Queue(maxsize=30)
+        self._thread: threading.Thread | None = None
+        self._start_worker()
+
+    def _start_worker(self) -> None:
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
 
@@ -21,7 +25,6 @@ class SpeechService:
         except ImportError:
             self.enabled = False
             return
-        engine = None
         try:
             engine = pyttsx3.init()
             engine.setProperty("rate", self.rate)
@@ -30,19 +33,20 @@ class SpeechService:
                 text = self._queue.get()
                 if text is None:
                     return
+                if not self.enabled:
+                    continue
                 try:
                     engine.say(text)
                     engine.runAndWait()
                 except Exception:
-                    pass
+                    continue
         except Exception:
             self.enabled = False
         finally:
-            if engine is not None:
-                try:
-                    engine.stop()
-                except Exception:
-                    pass
+            try:
+                engine.stop()
+            except Exception:
+                pass
 
     def say(self, text: str) -> None:
         if not self.enabled or not text:
@@ -55,6 +59,11 @@ class SpeechService:
                 self._queue.put_nowait(text)
             except queue.Empty:
                 pass
+
+    def restart(self) -> None:
+        self.stop()
+        self._queue = queue.Queue(maxsize=30)
+        self._start_worker()
 
     def stop(self) -> None:
         try:
